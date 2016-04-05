@@ -752,8 +752,11 @@ RandomPet : UnionTypeDeclaration
 	 type: Mammal|Bird
 ```
 
-One need a special type registry in order to explore type hierarchy using AST, as it provides only names of supertypes or expressions which define them.
-In contrast to the AST, the runtime type system allows to explore hierarchy without involving auxiliary services: the `ITypeDefinition.superClasses()` method returns an array of `ITypeDefinition` instances representing direct supertypes of the type, which can be treated just the same way. Let's list complete hierarchy for each of our types:
+One need a special type registry in order to explore type hierarchy using AST as it provides only names of supertypes or expressions which define them.
+
+In contrast to the AST, the runtime type system allows to explore hierarchy without involving auxiliary services. In order to obtain all direct supertypes of the type you should call the `ITypeDefinition.superTypes()` method. It returns an array of `ITypeDefinition` instances which can be treated just the same way as the one the method has been called for.
+
+Let's list complete hierarchy for each of our types:
 
 ```js
 function printHierarchy(runtimeType,indent){
@@ -799,7 +802,7 @@ RandomPet
     any
 ---
 ```
-In case you are need a complete set of supertypes including direct and indirect ones, you should call the `ITypeDefinition.allSuperTypes()` method.
+In case you need a complete set of supertypes including direct and indirect ones, you should call the `ITypeDefinition.allSuperTypes()` method.
 
 The `ITypeDefinition.isAssignableFrom()` method is used to check if one type inherits another or coincides with it. Lets check each of our type whether it inherits or coincides with `Pet` type:
 ```
@@ -819,7 +822,7 @@ PetCollection : false
 RandomPet : false
 ```
 
-The `ITypeDefinition.subTypes()` method is used to obtain direct subtypes of the type. Lets list all the direct subtypes of the `Pet` type:
+In order to obtain direct subtypes of the type, you should call the `ITypeDefinition.subTypes()` method which returns an array of `ITypeDefinition` instances. Lets list all the direct subtypes of the `Pet` type:
 ```
 api.types().filter(function(type){
     return type.name()=="Pet"
@@ -837,7 +840,7 @@ Mammal
 Bird
 ```
 
-In case you are need a complete set of subtypes including direct and indirect ones, you should call the `ITypeDefinition.allSubTypes()` method.
+In case you need a complete set of subtypes including direct and indirect ones, you should call the `ITypeDefinition.allSubTypes()` method.
 
 ### Properties of Object Types
 
@@ -925,55 +928,82 @@ PetCollection : ArrayTypeDeclaration
 RandomPet : UnionTypeDeclaration
 ```
 
-As AST does not allow to directly retrieve full information about object properties, it's one of the cases of runtime type system being useful.
-For example, lets select `Pet.metrics` property and print its type and list of its properties:
+As AST does not allow to directly retrieve full information about object property types, it's one more cases of runtime type system being useful.
+Let print hierarchy and properties for runtime type of the `Pet.metrics` property:
 ```js
+function printHierarchyAndProperties(runtimeType,indent){
+    indent = indent || "";
+    var typeName = runtimeType.nameId();
+    console.log(indent + "type: " + typeName);
+    if(runtimeType.properties().length>0) {
+        console.log(indent + "  properties:");
+        runtimeType.properties().forEach(function (prop) {
+            console.log(indent + "    " + prop.nameId() + ": " + prop.range().nameId());
+        });
+    }
+    if(runtimeType.superTypes().length>0) {
+        console.log(indent + "  supertypes:");
+        runtimeType.superTypes().forEach(function (st) {
+            printHierarchyAndProperties(st, indent + "    ");
+        });
+    }
+}
+
 api.types().filter(function(type){return type.name()=="Pet"})
     .forEach(function (type) {
 
-    type.properties().filter(function(prop){return prop.name()=="metrics"})
-        .forEach(function(prop) {
-
-            var runtimeDefinition = prop.runtimeDefinition();
-            console.log(runtimeDefinition.nameId());
-            runtimeDefinition.properties().forEach(function(p){
-                console.log("\t-",p.nameId(),": ", p.range().nameId());
-            })
-
+        type.properties().filter(function(prop){return prop.name()=="metrics"})
+            .forEach(function(prop) {
+                var runtimeDefinition = prop.runtimeDefinition();
+                printHierarchyAndProperties(runtimeDefinition);
+            });
     });
-});
 ```
 output:
 ```
-Metrics
-	- height :  NumberType
-	- width :  NumberType
-	- length :  NumberType
-	- weight :  NumberType
+type: metrics
+  supertypes:
+    type: Metrics
+      properties:
+        height: NumberType
+        width: NumberType
+        length: NumberType
+        weight: NumberType
+      supertypes:
+        type: object
+          supertypes:
+            type: any
 ```
-In the example right above we have used `Pet.metrics` property AST node to switch to runtime type system. But we can switch from AST node of the `Pet` type itself in order to achieve the same result:
+The runtime type has the same name as the property and has property type as a supertype. The picture looks more natural, if we switch to runtime type system directly from AST node of the `Pet` type itself:
 
 ```js
 api.types().filter(function(type){return type.name()=="Pet"})
     .forEach(function (type) {
 
         var runtimeDefinition = type.runtimeDefinition();
-        var propertyTypeRuntimeDefinition =
+        var propertyRange =
             runtimeDefinition.property("metrics").range();
 
-        console.log(propertyTypeRuntimeDefinition.nameId());
-        propertyTypeRuntimeDefinition.properties().forEach(function(p){
-             console.log("\t-",p.nameId(),": ", p.range().nameId());
-        })
-
+        printHierarchyAndProperties(propertyRange);
 });
 ```
+output:
+```
+type: Metrics
+  properties:
+    height: NumberType
+    width: NumberType
+    length: NumberType
+    weight: NumberType
+  supertypes:
+    type: object
+      supertypes:
+        type: any
+```
 
-Thus, `ITypeDefinition.nameId` method returns name of the type, and `ITypeDefinition.properties` returns a set of properties
-declared by the type itself, represented as array of `IProperty`. In order to obtain a set of properties declared by a type and all its supertypes, you should use the `ITypeDefinition.allProperties` method.  
+Thus, the `ITypeDefinition.properties()` returns a set of properties declared by the type itself, represented as an array of `IProperty`. In order to obtain a set of properties declared by a type and all its supertypes, you should use the `ITypeDefinition.allProperties()` method.  
 
-`IProperty.nameId` method returns name of the property, `IProperty.range` returns property value type represented as `ITypeDefinition`, and 
-`IProperty.domain` returns type declaring the property represented as `ITypeDefinition`.
+`IProperty.nameId()` method returns name of the property, `IProperty.range()` returns property value type represented as `ITypeDefinition` instance, and `IProperty.domain()` returns type declaring the property represented as `ITypeDefinition` instance.
 
 ### Array Types
 
