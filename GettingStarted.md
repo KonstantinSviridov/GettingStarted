@@ -665,7 +665,7 @@ PetCollection
 RandomPet
 ```
 
-`Pet`, `Mammal` and `Bird` are object types, lets check that:
+Lets now print types of AST nodes representing the types:
 
 ```js
 api.types().forEach(function (type) {
@@ -686,9 +686,12 @@ RandomPet : UnionTypeDeclaration
 
 ###Runtime Types
 
-Apart from AST, the parser provides one more way of representing types: runtime type system. Runtime type system has several advantages in comparison with AST: it allows to explore type hierarchy in a natural way, obtain component types of arrays and union types.
+Apart from AST, the parser provides one more way of representing types: runtime type system. Runtime type system has several advantages in comparison with AST: it allows to
 
-Having a `TypeDeclaration` instance in hands one can obtain a runtime type by means of `TypeDeclaration.runtimeDefinition` method returning `ITypeDefinition`:
+* explore type hierarchy in a natural way
+* obtain consistent object representations for component types of arrays and union types.
+
+Having a `TypeDeclaration` instance in hands one can obtain a runtime type by means of `TypeDeclaration.runtimeDefinition()` method returning `ITypeDefinition`:
 
 ![GettingStarted_BasicNodeRuntimeDefinition](images/GettingStarted_BasicNodeRuntimeDefinition.png)
 
@@ -700,6 +703,141 @@ Having a `TypeDeclaration` instance in hands one can obtain a runtime type by me
 * `IExternalType` is used to represent types defined by XML and JSON schemas
 * `IUnionType` is used to represent union types
 * `IAnnotationType` is used to represent annotation types
+
+Lets print runtime type names for our types:
+
+```js
+api.types().forEach(function(type){
+    var typeName = type.runtimeDefinition().nameId();
+    console.log(typeName);
+});
+```
+
+output:
+```
+Metrics
+Pet
+Mammal
+Bird
+PetCollection
+RandomPet
+```
+
+###Supertypes and Subtypes
+The `TypeDeclaration.type()` method provides information about extended type. It returns name of supertype or string form of expression which defines supertype. In case of more then one supertypes the method returns an array containing their names. Lets call the method for our types:
+
+```js
+api.types().forEach(function (type) {
+
+    console.log(type.name() + " : " + type.kind());
+    console.log("\t type: " + type.type())
+
+});
+```
+
+Output:
+
+```
+Metrics : ObjectTypeDeclaration
+	 type: object
+Pet : ObjectTypeDeclaration
+	 type: object
+Mammal : ObjectTypeDeclaration
+	 type: Pet
+Bird : ObjectTypeDeclaration
+	 type: Pet
+PetCollection : ArrayTypeDeclaration
+	 type: Pet[]
+RandomPet : UnionTypeDeclaration
+	 type: Mammal|Bird
+```
+
+One need a special type registry in order to explore type hierarchy using AST, as it provides only names of supertypes or expressions which define them.
+In contrast to the AST, the runtime type system allows to explore hierarchy without involving auxiliary services: the `ITypeDefinition.superClasses()` method returns an array of `ITypeDefinition` instances representing direct supertypes of the type, which can be treated just the same way. Let's list complete hierarchy for each of our types:
+
+```js
+function printHierarchy(runtimeType,indent){
+    indent = indent || "";
+    var typeName = runtimeType.nameId();
+    console.log(indent + typeName);
+    runtimeType.superTypes().forEach(function(st){
+        printHierarchy(st, indent + "  ");
+    });
+}
+
+api.types().forEach(function(type){
+    printHierarchy(type.runtimeDefinition());
+    console.log("---");
+});
+```
+output:
+```
+Metrics
+  object
+    any
+---
+Pet
+  object
+    any
+---
+Mammal
+  Pet
+    object
+      any
+---
+Bird
+  Pet
+    object
+      any
+---
+PetCollection
+  array
+    any
+---
+RandomPet
+  union
+    any
+---
+```
+In case you are need a complete set of supertypes including direct and indirect ones, you should call the `ITypeDefinition.allSuperTypes()` method.
+
+The `ITypeDefinition.isAssignableFrom()` method is used to check if one type inherits another or coincides with it. Lets check each of our type whether it inherits or coincides with `Pet` type:
+```
+console.log("Is the type assignable from \"Pet\" type?")
+api.types().filter(function(type){
+    console.log(type.name(),":",type.runtimeDefinition().isAssignableFrom("Pet"));
+});
+```
+output:
+```
+Is the type assignable from "Pet" type?
+Metrics : false
+Pet : true
+Mammal : true
+Bird : true
+PetCollection : false
+RandomPet : false
+```
+
+The `ITypeDefinition.subTypes()` method is used to obtain direct subtypes of the type. Lets list all the direct subtypes of the `Pet` type:
+```
+api.types().filter(function(type){
+    return type.name()=="Pet"
+}).forEach(function(type){
+    console.log("Subtypes of", type.name(), ":");
+    type.runtimeDefinition().subTypes().forEach(function(st){
+        console.log(st.nameId());
+    });
+});
+```
+output:
+```
+Subtypes of Pet :
+Mammal
+Bird
+```
+
+In case you are need a complete set of subtypes including direct and indirect ones, you should call the `ITypeDefinition.allSubTypes()` method.
 
 ### Properties of Object Types
 
@@ -902,47 +1040,6 @@ api.types().filter(function(type){return type.name()=="PetCollection"})
 ```
 The reason of the `color` property type having `null` value is that it is an anonymous type. In the next subsection we will learn how to obtain details about supertypes.
 
-###Supertypes and Subtypes
-Mammal and Bird types both inherit Pet type. Lets print that too:
-
-```js
-api.types().forEach(function (type) {
-
-    console.log(type.name() + " : " + type.kind());
-    if (type.type() && type.type().length > 0)
-        console.log("\t type: " + type.type())
-
-    type.properties().forEach(function(prop) {
-        console.log("\t", prop.name() + " : " + prop.kind());
-    });
-
-});
-```
-
-Output:
-
-```
-Metrics : ObjectTypeDeclaration
-	 height : NumberTypeDeclaration
-	 width : NumberTypeDeclaration
-	 length : NumberTypeDeclaration
-	 weight : NumberTypeDeclaration
-Pet : ObjectTypeDeclaration
-	 name : StringTypeDeclaration
-	 kind : StringTypeDeclaration
-	 price : NumberTypeDeclaration
-	 metrics : ObjectTypeDeclaration
-	 color : StringTypeDeclaration
-Mammal : ObjectTypeDeclaration
-	 type: Pet
-Bird : ObjectTypeDeclaration
-	 type: Pet
-	 wingLength : NumberTypeDeclaration
-PetCollection : ArrayTypeDeclaration
-RandomPet : UnionTypeDeclaration
-```
-
-Lets switch to runtime type system in order to inspect supertypes:
 
 ###Body Types
 
