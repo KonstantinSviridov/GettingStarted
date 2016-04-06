@@ -724,13 +724,13 @@ RandomPet
 ```
 
 ###Supertypes and Subtypes
-The `TypeDeclaration.type()` method provides information about extended type. It returns name of supertype or string form of expression which defines supertype. In case of more then one supertypes the method returns an array containing their names. Lets call the method for our types:
+The `TypeDeclaration.type()` method provides information about extended types. It returns an array os strings which are either names of supertypes or expressions which defines supertypes.
 
 ```js
 api.types().forEach(function (type) {
 
     console.log(type.name() + " : " + type.kind());
-    console.log("\t type: " + type.type())
+    console.log("\t type:", type.type())
 
 });
 ```
@@ -739,17 +739,19 @@ Output:
 
 ```
 Metrics : ObjectTypeDeclaration
-	 type: object
+	 type: [ 'object' ]
 Pet : ObjectTypeDeclaration
-	 type: object
+	 type: [ 'object' ]
 Mammal : ObjectTypeDeclaration
-	 type: Pet
+	 type: [ 'Pet' ]
 Bird : ObjectTypeDeclaration
-	 type: Pet
+	 type: [ 'Pet' ]
 PetCollection : ArrayTypeDeclaration
-	 type: Pet[]
+	 type: [ 'Pet[]' ]
+PetCollection2 : ArrayTypeDeclaration
+	 type: [ 'array' ]
 RandomPet : UnionTypeDeclaration
-	 type: Mammal|Bird
+	 type: [ 'Mammal|Bird' ]
 ```
 
 One need a special type registry in order to explore type hierarchy using AST as it provides only names of supertypes or expressions which define them.
@@ -842,7 +844,7 @@ Bird
 
 In case you need a complete set of subtypes including direct and indirect ones, you should call the `ITypeDefinition.allSubTypes()` method.
 
-### Properties of Object Types
+###Properties of Object Types
 
 Properties of `ObjectTypeDeclaration` can be obtained by means of `properties` method, which returns an array of `TypeDeclaration`:
 
@@ -1032,45 +1034,114 @@ PetCollection : ArrayTypeDeclaration
 ```
 
 As in case with property types, AST does not allow to directly inspect component type details. Thus, we have to switch to runtime type system.
-The code below prints all properties of component type:
+Runtime type of array types is represented as `IArrayType` instance.
+The code below prints details for array type component types:
 ```js
-api.types().filter(function(type){return type.name()=="PetCollection"})
+api.types().filter(function(type){return type.kind()=="ArrayTypeDeclaration"})
     .forEach(function (type) {
 
     var runtimeDefinition = type.items().runtimeDefinition();
-    console.log(runtimeDefinition.nameId());
-    runtimeDefinition.properties().forEach(function(p){
-        console.log("\t-",p.nameId(),": ", p.range().nameId());
-    })
+    console.log(type.name() + " component details:");
+    printHierarchyAndProperties(runtimeDefinition);
 });
 ```
 output:
 ```
-PetCollection
-	componentType:  Pet
-		- name :  StringType
-		- price :  NumberType
-		- metrics :  Metrics
-		- color :  null
+PetCollection component details:
+type: Pet
+  properties:
+    name: StringType
+    kind: StringType
+    price: NumberType
+    metrics: Metrics
+    color: null
+  supertypes:
+    type: object
+      supertypes:
+        type: any
 ```
-Once again, the same result can be achieved by switching to runtime type system right from the types AST node:
+
+The reason of the `color` property type having `null` type name is that its type is anonymous.
+
+
+Once again, the same result can be achieved by switching to runtime type system right from the types AST node. The method for retrieving 
+runtime array type component is `IArrayType.componentType()`.
 ```js
-api.types().filter(function(type){return type.name()=="PetCollection"})
+api.types().filter(function(type){return type.kind()=="ArrayTypeDeclaration"})
     .forEach(function (type) {
 
-        var runtimeDefinition = type.runtimeDefinition();
-        console.log(runtimeDefinition.nameId());
-        
-        var componentRuntimeDefinition = runtimeDefinition.componentType();        
-        console.log("\tcomponentType: ",componentRuntimeDefinition.nameId());
-        
-        componentRuntimeDefinition.properties().forEach(function(p){
-            console.log("\t-",p.nameId(),": ", p.range().nameId());
-        })
-
-    });
+    var runtimeDefinition = type.runtimeDefinition().componentType();
+    console.log(type.name() + " component details:");
+    printHierarchyAndProperties(runtimeDefinition);
+});
 ```
-The reason of the `color` property type having `null` value is that it is an anonymous type. In the next subsection we will learn how to obtain details about supertypes.
+output:
+```
+PetCollection component details:
+type: Pet
+  properties:
+    name: StringType
+    kind: StringType
+    price: NumberType
+    metrics: Metrics
+    color: null
+  supertypes:
+    type: object
+      supertypes:
+        type: any
+```
+
+###Union Types
+Runtime type of union types is represented as `IUnionType` instance. The `IUnionType.leftType()` and `IUnionType.rightType()` methods allow inspection
+union type components:
+
+```js
+api.types().filter(function(type){return type.runtimeDefinition().isUnion()})
+    .forEach(function (type) {
+
+    var runtimeDefinition = type.runtimeDefinition();
+    console.log(runtimeDefinition.nameId() + " components:");
+    console.log("left:");
+    //See "Properties of Object Types" section for "printHierarchyAndProperties" definition
+    printHierarchyAndProperties(runtimeDefinition.leftType(), "  ");
+    console.log("right:");
+    printHierarchyAndProperties(runtimeDefinition.rightType(), "  ");
+});
+```
+output:
+```
+RandomPet components:
+left:
+  type: Mammal
+    supertypes:
+      type: Pet
+        properties:
+          name: StringType
+          kind: StringType
+          price: NumberType
+          metrics: Metrics
+          color: null
+        supertypes:
+          type: object
+            supertypes:
+              type: any
+right:
+  type: Bird
+    properties:
+      wingLength: NumberType
+    supertypes:
+      type: Pet
+        properties:
+          name: StringType
+          kind: StringType
+          price: NumberType
+          metrics: Metrics
+          color: null
+        supertypes:
+          type: object
+            supertypes:
+              type: any
+```
 
 
 ###Body Types
@@ -1081,20 +1152,67 @@ Consider the following method:
   post:
     body:
       application/json:
-        type: Pet 
+        type: Pet
+        properties:
+          tailLength: number
 ```
 
 Method body can be obtained as follows:
 
+```js
+api.resources().filter(function(resource){return resource.relativeUri().value()=="/pets"})
+    .forEach(function(resource){
+
+        resource.childMethod("post").forEach(function(method) {
+            var bodyTypes = method.body();
+            bodyTypes.forEach(function (body) {
+                console.log("name:", body.name());
+                console.log("type:", body.type());
+                console.log("properties:");
+                body.properties().forEach(function (prop) {
+                    console.log(" ", prop.name(), ":", prop.type());
+                });
+            });
+        });
+});
 ```
-api.resources().filter(function(resource){return resource.relativeUri=="/pets"})
-    .forEach(function(resource)){
-        var method = resource.childMethod("post");
+output:
+```
+name: application/json
+type: [ 'Pet' ]
+properties:
+  tailLength : [ 'number' ]
+```
+Thus, body type has body media type as name and inherits type specified in `type` property. Lets see it again with the help of runtime type system:
+```js
+api.resources().filter(function(resource){return resource.relativeUri().value()=="/pets"})
+    .forEach(function(resource){
+    resource.childMethod("post").forEach(function(method) {
         var bodyTypes = method.body();
-        bodyTypes.forEach(function(body){
-            
-       })
-    }
+        bodyTypes.forEach(function (body) {
+        //See "Properties of Object Types" section for "printHierarchyAndProperties" definition
+            printHierarchyAndProperties(body.runtimeType());
+        });
+    });
+});
+```
+output:
+```
+type: application/json
+  properties:
+    tailLength: NumberType
+  supertypes:
+    type: Pet
+      properties:
+        name: StringType
+        kind: StringType
+        price: NumberType
+        metrics: Metrics
+        color: null
+      supertypes:
+        type: object
+          supertypes:
+            type: any
 ```
 
 ###Facets
