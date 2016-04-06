@@ -1217,3 +1217,114 @@ type: application/json
 
 ###Facets
 
+Facets can be interpreted as static properties of type. If a type defines a facet, each of its direct subtypes must fix the facet, i.e. provide a value for it. Facets are defined just the same way as RAML types. Example of string facet definition and fixing can be seen in the following RAML specification:
+```
+#%RAML 1.0
+title: Facets
+version: 1
+baseUri: /facets
+
+types:
+  User:
+    properties:
+      id: number
+      name:
+
+    facets:
+      #definition of string facet "role"
+      role:
+
+  Manager:
+    type: User
+    #fixing the "role" facet
+    role: manager
+    properties:
+      team: User[]
+
+  Admin:
+    type: User
+    #fixing the "role" facet
+    role: admin
+    properties:
+      phoneNumber: string
+```
+
+Facets defined by the type can be obtained by `TypeDeclaration.facets()` method returning an array of `TypeDeclaration` instances, and a set of fixed facet values can be obtained by `TypeDeclaration.fixedFacets()` method returning a `TypeInstance` instance (see "TypeInstance chapter").
+
+```js
+api.types().forEach(function(type){
+
+    console.log(type.name(), ":");
+    if(type.facets().length>0){
+        console.log("defined facets:");
+        type.facets().forEach(function(t){
+            console.log(t.name(),":",t.type());
+        });
+    }
+    if(type.fixedFacets()){
+        console.log("fixeded facets:",
+            JSON.stringify(type.fixedFacets().toJSON(),null,2));
+    }
+    console.log();
+});
+```
+output:
+```
+User :
+defined facets:
+role : [ 'string' ]
+
+Manager :
+fixeded facets: {
+  "role": "manager"
+}
+
+Admin :
+fixeded facets: {
+  "role": "admin"
+}
+
+```
+The same result can be achieved by means of runtime type system.
+A set of facets declared by the type itself can be retrieved by the `ITypeDefinition.facets()` returning an array of `IProperty`.
+If you need a set of facets declared by type and all of its supertypes, you should use the `ITypeDefinition.allFacets()` method.
+A set of type fixed facet values can be retrieved by the `ITypeDefinition.getFixedFacets()` method returning a JS object which map facet names to their values.
+
+```js
+api.types().forEach(function(type){
+
+    var runtimeType = type.runtimeDefinition();
+    console.log(runtimeType.nameId(), ":");
+    if(runtimeType.facets().length>0){
+        console.log("defined facets:");
+        runtimeType.allFacets().forEach(function(f){
+            console.log(f.nameId(),":",f.range().nameId());
+        });
+    }
+    if(Object.keys(runtimeType.getFixedFacets()).length>0){
+        console.log("fixeded facets:",
+            JSON.stringify(runtimeType.getFixedFacets(),null,2));
+    }
+    console.log();
+});
+```
+output:
+```
+User :
+defined facets:
+role : StringType
+
+Manager :
+fixeded facets: {
+  "role": "manager"
+}
+
+Admin :
+fixeded facets: {
+  "role": "admin"
+}
+```
+
+All the above sets of facets contain user defined facets, but not the built in facets.
+
+##`TypeInstance`s
