@@ -974,21 +974,23 @@ type: metrics
           supertypes:
             type: any
 ```
-The runtime type has the same name as the property and has property type as a supertype. The picture looks more natural, if we switch to runtime type system directly from AST node of the `Pet` type itself:
+The runtime type has the same name as the property and has property type as supertype. The picture looks more natural, if we switch to runtime type system directly from AST node of the type itself:
 
 ```js
 api.types().filter(function(type){return type.name()=="Pet"})
     .forEach(function (type) {
 
         var runtimeDefinition = type.runtimeDefinition();
-        var propertyRange =
-            runtimeDefinition.property("metrics").range();
+        var runtimeProp = runtimeDefinition.property("metrics");
+        var propertyRange = runtimeProp.range();
 
+        console.log(runtimeProp.domain().nameId()+"."+runtimeProp.nameId()+" range details:")
         printHierarchyAndProperties(propertyRange);
 });
 ```
 output:
 ```
+Pet.metrics range details:
 type: Metrics
   properties:
     height: NumberType
