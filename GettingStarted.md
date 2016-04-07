@@ -684,7 +684,7 @@ PetCollection : ArrayTypeDeclaration
 RandomPet : UnionTypeDeclaration
 ```
 
-###Runtime Types
+###Runtime Type System
 
 Apart from AST, the parser provides one more way of representing types: runtime type system. Runtime type system has several advantages in comparison with AST: it allows to
 
@@ -699,10 +699,20 @@ Having a `TypeDeclaration` instance in hands one can obtain a runtime type by me
 
 ![GettingStarted_ITypeDefinitionHierarchy](images/GettingStarted_ITypeDefinitionHierarchy.png)
 
+* `IAnnotationType` is used to represent annotation types
 * `IArrayType` is used to represent array types
 * `IExternalType` is used to represent types defined by XML and JSON schemas
 * `IUnionType` is used to represent union types
-* `IAnnotationType` is used to represent annotation types
+* `IValueTypeDefinition` is used to represent scalar types
+
+`ITypeDefinition` has a set of methods which allow to check type is annotation, array type, etc:
+
+* `isAnnotationType`
+* `isArray`
+* `isExternal`
+* `isObject`
+* `isUnion`
+* `isValueType`
 
 Lets print runtime type names for our types:
 
@@ -936,8 +946,8 @@ Let print hierarchy and properties for runtime type of the `Pet.metrics` propert
 function printHierarchyAndProperties(runtimeType,indent){
     indent = indent || "";
     var typeName = runtimeType.nameId();
-    console.log(indent + "type: " + typeName);
-    if(runtimeType.properties().length>0) {
+    console.log(indent + "type: " + typeName + " (" + runtimeType.kind() + ")");
+    if(runtimeType.isAssignableFrom("object") && runtimeType.properties().length>0) {
         console.log(indent + "  properties:");
         runtimeType.properties().forEach(function (prop) {
             console.log(indent + "    " + prop.nameId() + ": " + prop.range().nameId());
@@ -963,18 +973,18 @@ api.types().filter(function(type){return type.name()=="Pet"})
 ```
 output:
 ```
-type: metrics
+type: metrics (object)
   supertypes:
-    type: Metrics
+    type: Metrics (object)
       properties:
         height: NumberType
         width: NumberType
         length: NumberType
         weight: NumberType
       supertypes:
-        type: object
+        type: object (object)
           supertypes:
-            type: any
+            type: any (object)
 ```
 The runtime type has the same name as the property and has property type as supertype. The picture looks more natural, if we switch to runtime type system directly from AST node of the type itself:
 
@@ -993,16 +1003,16 @@ api.types().filter(function(type){return type.name()=="Pet"})
 output:
 ```
 Pet.metrics range details:
-type: Metrics
+type: Metrics (object)
   properties:
     height: NumberType
     width: NumberType
     length: NumberType
     weight: NumberType
   supertypes:
-    type: object
+    type: object (object)
       supertypes:
-        type: any
+        type: any (object)
 ```
 
 Thus, the `ITypeDefinition.properties()` returns a set of properties declared by the type itself, represented as an array of `IProperty`. In order to obtain a set of properties declared by a type and all its supertypes, you should use the `ITypeDefinition.allProperties()` method.  
@@ -1048,7 +1058,7 @@ api.types().filter(function(type){return type.kind()=="ArrayTypeDeclaration"})
 output:
 ```
 PetCollection component details:
-type: Pet
+type: Pet (object)
   properties:
     name: StringType
     kind: StringType
@@ -1056,9 +1066,9 @@ type: Pet
     metrics: Metrics
     color: null
   supertypes:
-    type: object
+    type: object (object)
       supertypes:
-        type: any
+        type: any (object)
 ```
 
 The reason of the `color` property type having `null` type name is that its type is anonymous.
@@ -1078,7 +1088,7 @@ api.types().filter(function(type){return type.kind()=="ArrayTypeDeclaration"})
 output:
 ```
 PetCollection component details:
-type: Pet
+type: Pet (object)
   properties:
     name: StringType
     kind: StringType
@@ -1086,9 +1096,9 @@ type: Pet
     metrics: Metrics
     color: null
   supertypes:
-    type: object
+    type: object (object)
       supertypes:
-        type: any
+        type: any (object)
 ```
 
 ###Union Types
@@ -1112,9 +1122,9 @@ output:
 ```
 RandomPet components:
 left:
-  type: Mammal
+  type: Mammal (object)
     supertypes:
-      type: Pet
+      type: Pet (object)
         properties:
           name: StringType
           kind: StringType
@@ -1122,15 +1132,15 @@ left:
           metrics: Metrics
           color: null
         supertypes:
-          type: object
+          type: object (object)
             supertypes:
-              type: any
+              type: any (object)
 right:
-  type: Bird
+  type: Bird (object)
     properties:
       wingLength: NumberType
     supertypes:
-      type: Pet
+      type: Pet (object)
         properties:
           name: StringType
           kind: StringType
@@ -1138,9 +1148,9 @@ right:
           metrics: Metrics
           color: null
         supertypes:
-          type: object
+          type: object (object)
             supertypes:
-              type: any
+              type: any (object)
 ```
 
 
@@ -1198,11 +1208,11 @@ api.resources().filter(function(resource){return resource.relativeUri().value()=
 ```
 output:
 ```
-type: application/json
+type: application/json (object)
   properties:
     tailLength: NumberType
   supertypes:
-    type: Pet
+    type: Pet (object)
       properties:
         name: StringType
         kind: StringType
@@ -1210,9 +1220,9 @@ type: application/json
         metrics: Metrics
         color: null
       supertypes:
-        type: object
+        type: object (object)
           supertypes:
-            type: any
+            type: any (object)
 ```
 
 ###Facets
@@ -1326,5 +1336,116 @@ fixeded facets: {
 ```
 
 All the above sets of facets contain user defined facets, but not the built in facets.
+
+
+##Annotations
+
+In order to extract AST nodes, which describe annotaton types, we can use `Api.annotationTypes()` method, returning an array of `AnnotationTypeDeclaration`:
+
+![GettingStarted_APITypes](images/GettingStarted_APIAnnotationTypes.png)
+
+`AnnotationTypeDeclaration` is the root of the hierarchy for AST type declarations:
+
+![GettingStarted_AnnotationTypeDeclarationHierarchy](images/GettingStarted_TypeDeclarationHierarchy.png)
+
+Each `AnnotationTypeDeclaration` subtype inherits corresponding `TypeDeclaration` subtype. For example, `ObjectAnnotationTypeDeclaration`
+inherits `ObjectTypeDeclaration`, `ArrayAnnotationTypeDeclaration` inherits `ArrayTypeDeclaration` etc. Thus annotation type AST nodes can be treated just the same way as AST nodes of types.
+
+Consider the following RAML specification:
+```
+#%RAML 1.0
+title: Annotations
+version: v1
+baseUri: /annotations
+
+annotationTypes:
+
+  MyStringAnnotation:
+    enum: [ value1, value2, value3 ]
+
+  MyObjectAnnotation:
+    properties:
+      property1: string
+      property2: boolean
+```
+
+Lets print some details about each of our annotation types:
+
+```
+api.annotationTypes().filter(function(aType){
+    return aType.name()=="MyStringAnnotation"
+}).forEach(function(aType){
+
+    console.log("annotation type");
+    console.log("  name:",aType.name());
+    console.log("  type:",aType.type());
+    console.log("  enum:",aType.enum());//enum() method is inherited from StringTypeDeclaration
+});
+api.annotationTypes().filter(function(aType){
+    return aType.name()=="MyObjectAnnotation"
+}).forEach(function(aType){
+    
+    console.log("annotation type");
+    console.log("  name:",aType.name());
+    console.log("  type:",aType.type());
+    console.log("  properties:");
+    aType.properties().forEach(function(prop){//properties() method is inherited from ObjectTypeDeclaration
+        console.log("   ",prop.name(),":",prop.type());
+    });
+});
+```
+
+output:
+
+```
+annotation type
+  name: MyStringAnnotation
+  type: [ 'string' ]
+  enum: [ 'value1', 'value2', 'value3' ]
+annotation type
+  name: MyObjectAnnotation
+  type: [ 'object' ]
+  properties:
+    property1 : [ 'string' ]
+    property2 : [ 'string' ]
+```
+
+The same operation can be performed by means of runtime type system:
+```js
+	api.annotationTypes().forEach(function(aType){
+	    //see "Supertypes and Subtypes" section of the "Types" chapter
+	    //for "printHierarchyAndProperties" definition 
+	    printHierarchyAndProperties(aType.runtimeDefinition());
+	    console.log();
+	});
+```
+
+output:
+```
+type: MyStringAnnotation (annotation)
+  supertypes:
+    type: MyStringAnnotation (value)
+      supertypes:
+        type: StringType (value)
+          supertypes:
+            type: ValueType (value)
+            type: scalar (value)
+              supertypes:
+                type: any (object)
+
+type: MyObjectAnnotation (annotation)
+  supertypes:
+    type: MyObjectAnnotation (object)
+      properties:
+        property1: StringType
+        property2: StringType
+      supertypes:
+        type: object (object)
+          supertypes:
+            type: any (object)
+
+```
+
+
 
 ##`TypeInstance`s
