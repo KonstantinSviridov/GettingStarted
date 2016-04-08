@@ -1259,7 +1259,7 @@ types:
       phoneNumber: string
 ```
 
-Facets defined by the type can be obtained by `TypeDeclaration.facets()` method returning an array of `TypeDeclaration` instances, and a set of fixed facet values can be obtained by `TypeDeclaration.fixedFacets()` method returning a `TypeInstance` instance (see "TypeInstance chapter").
+Facets defined by the type can be obtained by `TypeDeclaration.facets()` method returning an array of `TypeDeclaration` instances, and a set of fixed facet values can be obtained by `TypeDeclaration.fixedFacets()` method returning a `TypeInstance`. This `TypeInstance` can be called the `toJSON()` method in order to be turned to object which map facet names to their values.
 
 ```js
 api.types().forEach(function(type){
@@ -1298,7 +1298,7 @@ fixeded facets: {
 The same result can be achieved by means of runtime type system.
 A set of facets declared by the type itself can be retrieved by the `ITypeDefinition.facets()` returning an array of `IProperty`.
 If you need a set of facets declared by type and all of its supertypes, you should use the `ITypeDefinition.allFacets()` method.
-A set of type fixed facet values can be retrieved by the `ITypeDefinition.getFixedFacets()` method returning a JS object which map facet names to their values.
+A set of type fixed facet values can be retrieved by the `ITypeDefinition.getFixedFacets()` method returning actual values used to fix facets.
 
 ```js
 api.types().forEach(function(type){
@@ -1446,6 +1446,65 @@ type: MyObjectAnnotation (annotation)
 
 ```
 
+Each annotatable RAML element inherits `RAMLLanguageElement`, and it provides its annotations as `RAMLLanguageElement.annotations()`
+method value. The method returns an array of annotation references represented as `AnnotationRef` instances.
 
+The `AnnotationRef.annotation()` method is used to retrieve AST node of the referenced annotation. The `AnnotationRef.structuredValue()`
+method is used to obtain reference value represented as `TypeInstance` which can be called `toJSON()` method in order to obtain actual value.
 
-##`TypeInstance`s
+Consider the following resource:
+
+```
+/resource:
+  (MyStringAnnotation): value2
+  (MyObjectAnnotation):
+    property1: property 1 value
+    property2: property 2 value
+```
+
+Lets iterate through these annotation references and print their referenced annotations and values:
+
+```js
+api.childResource("/resource").annotations().forEach(function(aRef){
+
+    console.log("referenced annotation:");
+    //see "Supertypes and Subtypes" section of the "Types" chapter
+	//for "printHierarchyAndProperties" definition 
+    printHierarchyAndProperties(aRef.annotation().runtimeDefinition());
+    console.log("value:", JSON.stringify(aRef.structuredValue().toJSON(),null,2));
+    console.log();
+});
+```
+
+output:
+
+```
+referenced annotation:
+type: MyStringAnnotation (annotation)
+  supertypes:
+    type: MyStringAnnotation (value)
+      supertypes:
+        type: StringType (value)
+          supertypes:
+            type: ValueType (value)
+            type: scalar (value)
+              supertypes:
+                type: any (object)
+value: "value2"
+
+referenced annotation:
+type: MyObjectAnnotation (annotation)
+  supertypes:
+    type: MyObjectAnnotation (object)
+      properties:
+        property1: StringType
+        property2: StringType
+      supertypes:
+        type: object (object)
+          supertypes:
+            type: any (object)
+value: {
+  "property1": "property 1 value",
+  "property2": "property 2 value"
+}
+```
