@@ -1449,7 +1449,7 @@ type: MyObjectAnnotation (annotation)
 Each annotatable RAML element inherits `RAMLLanguageElement`, and it provides its annotations as `RAMLLanguageElement.annotations()`
 method value. The method returns an array of annotation references represented as `AnnotationRef` instances.
 
-The `AnnotationRef.annotation()` method is used to retrieve AST node of the referenced annotation. The `AnnotationRef.structuredValue()`
+The `AnnotationRef.annotations()` method is used to retrieve AST node of the referenced annotation. The `AnnotationRef.structuredValue()`
 method is used to obtain reference value represented as `TypeInstance` which can be called `toJSON()` method in order to obtain actual value.
 
 Consider the following resource:
